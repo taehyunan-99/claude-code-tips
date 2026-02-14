@@ -100,13 +100,6 @@ transcript_path=$(echo "$input" | jq -r '.transcript_path // empty')
 # Get current time
 current_time=$(date +%H:%M)
 
-# Get Python version
-if command -v python &>/dev/null; then
-    py_ver=$(python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "")
-else
-    py_ver=""
-fi
-
 # Get context window size from JSON (accurate), but calculate tokens from transcript
 # (more accurate than total_input_tokens which excludes system prompt/tools/memory)
 # See: github.com/anthropics/claude-code/issues/13652
@@ -179,9 +172,8 @@ else
     ctx="${bar} ${C_GRAY}~${pct}% of ${max_k}k tokens"
 fi
 
-# Build output: Model | Time | Dir | Python | Branch (uncommitted) | Context
+# Build output: Model | Time | Dir | Branch (uncommitted) | Context
 output="${C_ACCENT}${model}${C_GRAY} | ${current_time} | 📁${dir}"
-[[ -n "$py_ver" ]] && output+=" | 🐍${py_ver}"
 [[ -n "$branch" ]] && output+=" | 🔀${branch} ${git_status}"
 output+=" | ${ctx}${C_RESET}"
 
