@@ -2,7 +2,7 @@
 
 # Color theme: gray, orange, blue, teal, green, lavender, rose, gold, slate, cyan
 # Preview colors with: bash scripts/color-preview.sh
-COLOR="blue"
+COLOR="orange"
 
 # Color codes
 C_RESET='\033[0m'
@@ -45,8 +45,8 @@ if [[ -n "$cwd" && -d "$cwd" ]]; then
             fetch_head="$cwd/.git/FETCH_HEAD"
             fetch_ago=""
             if [[ -f "$fetch_head" ]]; then
-                fetch_time=$(stat -f %m "$fetch_head" 2>/dev/null || stat -c %Y "$fetch_head" 2>/dev/null)
-                if [[ -n "$fetch_time" ]]; then
+                fetch_time=$(stat -f %m "$fetch_head" 2>/dev/null || stat -c %Y "$fetch_head" 2>/dev/null || echo "")
+                if [[ -n "$fetch_time" && "$fetch_time" =~ ^[0-9]+$ ]]; then
                     now=$(date +%s)
                     diff=$((now - fetch_time))
                     if [[ $diff -lt 60 ]]; then
@@ -59,7 +59,7 @@ if [[ -n "$cwd" && -d "$cwd" ]]; then
                         fetch_ago="$((diff / 86400))d ago"
                     fi
                 fi
-            fi
+            fi 2>/dev/null
 
             counts=$(git -C "$cwd" rev-list --left-right --count HEAD...@{upstream} 2>/dev/null)
             ahead=$(echo "$counts" | cut -f1)
@@ -97,10 +97,21 @@ fi
 # Get transcript path for context calculation and last message feature
 transcript_path=$(echo "$input" | jq -r '.transcript_path // empty')
 
+# Get current time
+current_time=$(date +%H:%M)
+
+# Get Python version
+if command -v python &>/dev/null; then
+    py_ver=$(python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "")
+else
+    py_ver=""
+fi
+
 # Get context window size from JSON (accurate), but calculate tokens from transcript
 # (more accurate than total_input_tokens which excludes system prompt/tools/memory)
 # See: github.com/anthropics/claude-code/issues/13652
 max_context=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
+[[ -z "$max_context" || "$max_context" == "null" ]] && max_context=200000
 max_k=$((max_context / 1000))
 
 # Calculate context bar from transcript
@@ -168,12 +179,13 @@ else
     ctx="${bar} ${C_GRAY}~${pct}% of ${max_k}k tokens"
 fi
 
-# Build output: Model | Dir | Branch (uncommitted) | Context
-output="${C_ACCENT}${model}${C_GRAY} | 📁${dir}"
+# Build output: Model | Time | Dir | Python | Branch (uncommitted) | Context
+output="${C_ACCENT}${model}${C_GRAY} | ${current_time} | 📁${dir}"
+[[ -n "$py_ver" ]] && output+=" | 🐍${py_ver}"
 [[ -n "$branch" ]] && output+=" | 🔀${branch} ${git_status}"
 output+=" | ${ctx}${C_RESET}"
 
-printf '%b\n' "$output"
+printf '%b' "$output"
 
 # Get user's last message (text only, not tool results, skip unhelpful messages)
 if [[ -n "$transcript_path" && -f "$transcript_path" ]]; then
@@ -201,11 +213,12 @@ if [[ -n "$transcript_path" && -f "$transcript_path" ]]; then
         first // ""
     ' < "$transcript_path" 2>/dev/null)
 
-    if [[ -n "$last_user_msg" ]]; then
-        if [[ ${#last_user_msg} -gt $max_len ]]; then
-            echo "💬 ${last_user_msg:0:$((max_len - 3))}..."
-        else
-            echo "💬 ${last_user_msg}"
-        fi
-    fi
+    # Disabled: Show last user message
+    # if [[ -n "$last_user_msg" ]]; then
+    #     if [[ ${#last_user_msg} -gt $max_len ]]; then
+    #         echo "💬 ${last_user_msg:0:$((max_len - 3))}..."
+    #     else
+    #         echo "💬 ${last_user_msg}"
+    #     fi
+    # fi
 fi
